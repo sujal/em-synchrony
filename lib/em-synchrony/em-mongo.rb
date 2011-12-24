@@ -24,6 +24,37 @@ module EM
           raise AuthenticationError, auth_result2["errmsg"]
         end
       end
+      
+      if defined?(EM::Mongo::Cursor)
+        # need to rewrite this command since it relies on Cursor being async
+        def command(selector, opts={})
+          check_response = opts.fetch(:check_response, true)
+          raise MongoArgumentError, "command must be given a selector" unless selector.is_a?(Hash) && !selector.empty?
+
+          if selector.keys.length > 1 && RUBY_VERSION < '1.9' && selector.class != BSON::OrderedHash
+            raise MongoArgumentError, "DB#command requires an OrderedHash when hash contains multiple keys"
+          end
+
+          response = RequestResponse.new
+          cmd_resp = Cursor.new(self.collection(SYSTEM_COMMAND_COLLECTION), :limit => -1, :selector => selector).anext_document
+
+          cmd_resp.callback do |doc|
+            if doc.nil?
+              response.fail([OperationFailure, "Database command '#{selector.keys.first}' failed: returned null."])
+            elsif (check_response && !EM::Mongo::Support.ok?(doc))
+              response.fail([OperationFailure, "Database command '#{selector.keys.first}' failed: #{doc.inspect}"])
+            else
+              response.succeed(doc)
+            end
+          end
+
+          cmd_resp.errback do |err|
+            response.fail([OperationFailure, "Database command '#{selector.keys.first}' failed: #{err[1]}"])
+          end
+
+          response
+        end
+      end
     end
 
     class Connection
@@ -53,22 +84,17 @@ module EM
       #
       if defined?(EM::Mongo::Cursor)
 
-        # afind     is the old (async) find
-        # afind_one is rewritten to call afind
-        # find      is sync, using a callback on the cursor
-        # find_one  is sync, by calling find and taking the first element.
+        # changed to make the cursor sync for versions greater than 0.3.6
+        # this means find and afind are the same
+        
+        # afind_one is rewritten to call anext_document on the cursor returned from find
+        # find_one  is sync in the original form, unchanged because cursor is changed
         # first     is sync, an alias for find_one
 
         alias :afind :find
-        def find(*args)
-          f = Fiber.current
-          cursor = afind(*args)
-          cursor.to_a.callback{ |res| f.resume(res) }
-          Fiber.yield
-        end
 
-        # need to rewrite afind_one manually, as it calls 'find' (reasonably
-        # expecting it to be what is now known as 'afind')
+        # need to rewrite afind_one manually, as it calls next_document on
+        # the cursor
 
         def afind_one(spec_or_object_id=nil, opts={})
           spec = case spec_or_object_id
@@ -81,14 +107,9 @@ module EM
                  else
                    raise TypeError, "spec_or_object_id must be an instance of ObjectId or Hash, or nil"
                  end
-          afind(spec, opts.merge(:limit => -1)).next_document
+          find(spec, opts.merge(:limit => -1)).anext_document
         end
         alias :afirst :afind_one
-
-        def find_one(selector={}, opts={})
-          opts[:limit] = 1
-          find(selector, opts).first
-        end
         alias :first :find_one
 
       #
@@ -128,5 +149,77 @@ module EM
 
     end
 
+    if defined?(EM::Mongo::Cursor)
+      class Cursor
+      
+        # Get the next document specified the cursor options.
+        #
+        # @return [Hash, Nil] the next document or Nil if no documents remain.
+        alias :anext_document :next_document
+        def next_document
+          f = Fiber.current
+          response = anext_document()
+          response.callback { |res| f.resume(res) }
+          Fiber.yield
+        end
+        alias :next :next_document
+        
+        # Determine whether this cursor has any remaining results.
+        #
+        alias :ahas_next? :has_next?
+        def has_next?
+          f = Fiber.current
+          response = ahas_next?
+          response.callback { |res| f.resume(res) }
+          Fiber.yield
+        end
+        
+        alias :aexplain :explain
+        def explain
+          f = Fiber.current
+          response = aexplain
+          response.callback { |res| f.resume(res) }
+          Fiber.yield
+        end
+        
+        alias :acount :count
+        def count(*args)
+          f = Fiber.current
+          response = acount(*args)
+          response.callback { |res| f.resume(res) }
+          Fiber.yield
+        end
+        
+        alias :adefer_as_a :defer_as_a
+        def defer_as_a
+          f = Fiber.current
+          response = adefer_as_a
+          response.callback {|res| f.resume(res) }
+          Fiber.yield
+        end
+        
+        alias :to_a :defer_as_a
+        alias :ato_a :adefer_as_a
+        
+        def each(&blk)
+          raise "A callback block is required for #each" unless blk
+          EM.next_tick do
+            next_doc_resp = anext_document
+            next_doc_resp.callback do |doc|
+              blk.call(doc)
+              doc.nil? ? close : self.each(&blk)
+            end
+            next_doc_resp.errback do |err|
+              if blk.arity > 1
+                blk.call(:error, err)
+              else
+                blk.call(:error)
+              end
+            end
+          end
+        end
+        
+      end
+    end
   end
 end

@@ -1,5 +1,5 @@
 begin
-  require "mongo"
+  require "mongo/connection"
 rescue LoadError => error
   raise "Missing EM-Synchrony dependency: gem install mongo"
 end

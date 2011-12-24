@@ -15,4 +15,5 @@ group :development do
   gem 'em-hiredis'
   gem 'mongo'
   gem 'amqp'
+  gem 'mongoid'
 end

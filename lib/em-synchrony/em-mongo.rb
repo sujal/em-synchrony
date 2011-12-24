@@ -25,6 +25,33 @@ module EM
         end
       end
       
+      %w(collections create_collection drop_collection drop_index index_information get_last_error error? add_user).each do |name|
+        class_eval <<-EOS, __FILE__, __LINE__
+          alias :a#{name} :#{name}
+          def #{name}(*args)
+            f = Fiber.current
+            response = a#{name}(*args)
+            response.callback { |res| f.resume(res) }
+            response.errback {|res| f.resume(res) }
+            Fiber.yield
+          end
+        EOS
+      end
+      
+      # need to redefine collection_names because it relies on a cursor
+      def collection_names
+        response = RequestResponse.new
+        name_resp = collections_info.adefer_as_a
+        name_resp.callback do |docs|
+          names = docs.collect{ |doc| doc['name'] || '' }
+          names = names.delete_if {|name| name.index(self.name).nil? || name.index('$')}
+          names = names.map{ |name| name.sub(self.name + '.','')}
+          response.succeed(names)
+        end
+        name_resp.errback { |err| response.fail err }
+        response
+      end
+      
       if defined?(EM::Mongo::Cursor)
         # need to rewrite this command since it relies on Cursor being async
         def command(selector, opts={})
@@ -160,6 +187,7 @@ module EM
           f = Fiber.current
           response = anext_document()
           response.callback { |res| f.resume(res) }
+          response.errback {|res| f.resume(res) }
           Fiber.yield
         end
         alias :next :next_document
@@ -171,6 +199,7 @@ module EM
           f = Fiber.current
           response = ahas_next?
           response.callback { |res| f.resume(res) }
+          response.errback {|res| f.resume(res) }
           Fiber.yield
         end
         
@@ -179,6 +208,7 @@ module EM
           f = Fiber.current
           response = aexplain
           response.callback { |res| f.resume(res) }
+          response.errback {|res| f.resume(res) }
           Fiber.yield
         end
         
@@ -187,6 +217,7 @@ module EM
           f = Fiber.current
           response = acount(*args)
           response.callback { |res| f.resume(res) }
+          response.errback {|res| f.resume(res) }
           Fiber.yield
         end
         
@@ -195,6 +226,7 @@ module EM
           f = Fiber.current
           response = adefer_as_a
           response.callback {|res| f.resume(res) }
+          response.errback {|res| f.resume(res) }
           Fiber.yield
         end
         

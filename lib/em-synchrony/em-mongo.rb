@@ -90,12 +90,17 @@ module EM
 
         @em_connection = EMConnection.connect(host, port, timeout, opts)
         @db = {}
-
         # establish connection before returning
-        EM.next_tick { f.resume }
+        @em_connection.callback { f.resume }
+        
+        # not sure how the resume mechanics work here - going to ignore for now
+        # @em_connection.errback { f.resume; @on_close.call }
+        
         Fiber.yield
       end
     end
+    
+    
 
     class Collection
 

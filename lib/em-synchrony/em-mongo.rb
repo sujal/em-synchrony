@@ -130,6 +130,28 @@ module EM
       alias :afirst :afind_one
       # alias :first :find_one
 
+      %w(safe_insert safe_update).each do |name|
+        class_eval <<-EOS, __FILE__, __LINE__
+          alias :a#{name} :#{name}
+          def #{name}(*args)
+            f = Fiber.current
+            immediate_return = false
+            result = nil
+            response = a#{name}(*args)
+            response.callback { |res| 
+                                if f == Fiber.current
+                                  immediate_return = true
+                                else
+                                  f.resume(res)
+                                end
+                              }
+            response.errback {|res| f.resume(res) }
+            immediate_return ? response : Fiber.yield 
+          end
+        EOS
+      end
+
+
     end
 
     class Cursor

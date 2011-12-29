@@ -128,7 +128,7 @@ module EM
         find(spec, opts.merge(:limit => -1)).anext_document
       end
       alias :afirst :afind_one
-      alias :first :find_one
+      # alias :first :find_one
 
     end
 
@@ -147,6 +147,9 @@ module EM
           end
         EOS
       end
+      
+      alias :anext :anext_document
+      alias :next :next_document
       
       alias :to_a :defer_as_a
       alias :ato_a :adefer_as_a

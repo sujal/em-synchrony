@@ -1,5 +1,6 @@
-require "em-synchrony/em-mongo"
+require "em-mongo"
 require "em-synchrony/mongoid/extras"
+require "em-synchrony/em-mongo"
 require "em-synchrony/mongoid/database"
 require "em-synchrony/mongoid/cursor"
 

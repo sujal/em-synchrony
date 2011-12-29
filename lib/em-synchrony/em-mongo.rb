@@ -134,55 +134,18 @@ module EM
 
     class Cursor
     
-      # Get the next document specified the cursor options.
-      #
-      # @return [Hash, Nil] the next document or Nil if no documents remain.
-      alias :anext_document :next_document
-      def next_document
-        f = Fiber.current
-        response = anext_document()
-        response.callback { |res| f.resume(res) }
-        response.errback {|res| f.resume(res) }
-        Fiber.yield
-      end
-      alias :next :next_document
-      
-      # Determine whether this cursor has any remaining results.
-      #
-      alias :ahas_next? :has_next?
-      def has_next?
-        f = Fiber.current
-        response = ahas_next?
-        response.callback { |res| f.resume(res) }
-        response.errback {|res| f.resume(res) }
-        Fiber.yield
-      end
-      
-      alias :aexplain :explain
-      def explain
-        f = Fiber.current
-        response = aexplain
-        response.callback { |res| f.resume(res) }
-        response.errback {|res| f.resume(res) }
-        Fiber.yield
-      end
-      
-      alias :acount :count
-      def count(*args)
-        f = Fiber.current
-        response = acount(*args)
-        response.callback { |res| f.resume(res) }
-        response.errback {|res| f.resume(res) }
-        Fiber.yield
-      end
-      
-      alias :adefer_as_a :defer_as_a
-      def defer_as_a
-        f = Fiber.current
-        response = adefer_as_a
-        response.callback {|res| f.resume(res) }
-        response.errback {|res| f.resume(res) }
-        Fiber.yield
+    
+      %w(next_document has_next? explain count defer_as_a).each do |name|
+        class_eval <<-EOS, __FILE__, __LINE__
+          alias :a#{name} :#{name}
+          def #{name}(*args)
+            f = Fiber.current
+            response = a#{name}(*args)
+            response.callback { |res| f.resume(res) }
+            response.errback {|res| f.resume(res) }
+            Fiber.yield
+          end
+        EOS
       end
       
       alias :to_a :defer_as_a

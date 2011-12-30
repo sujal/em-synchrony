@@ -6,6 +6,7 @@ require 'spec/helper/tolerance_matcher'
 
 require 'mongoid'
 require 'lib/em-synchrony'
+require 'lib/em-synchrony/mongoid'
 
 def now(); Time.now.to_f; end
 
@@ -13,7 +14,6 @@ RSpec.configure do |config|
   config.include(Sander6::CustomMatchers)
 end
 
-require 'em-synchrony/mongoid'
 
 MODELS = File.join(File.dirname(__FILE__), "app/models")
 $LOAD_PATH.unshift(MODELS)

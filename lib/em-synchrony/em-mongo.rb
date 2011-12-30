@@ -30,10 +30,23 @@ module EM
           alias :a#{name} :#{name}
           def #{name}(*args)
             f = Fiber.current
+            immediate_return = false
             response = a#{name}(*args)
-            response.callback { |res| f.resume(res) }
-            response.errback {|res| f.resume(res) }
-            Fiber.yield
+            response.callback { |res| 
+                                if f == Fiber.current
+                                  immediate_return = true
+                                else
+                                  f.resume(res)
+                                end
+                               }
+            response.errback { |res|
+                               if f == Fiber.current
+                                 immediate_return = true
+                               else
+                                 f.resume(res)
+                               end
+                              }
+            immediate_return ? response : Fiber.yield 
           end
         EOS
       end
@@ -136,7 +149,6 @@ module EM
           def #{name}(*args)
             f = Fiber.current
             immediate_return = false
-            result = nil
             response = a#{name}(*args)
             response.callback { |res| 
                                 if f == Fiber.current
@@ -144,8 +156,14 @@ module EM
                                 else
                                   f.resume(res)
                                 end
+                               }
+            response.errback { |res|
+                               if f == Fiber.current
+                                 immediate_return = true
+                               else
+                                 f.resume(res)
+                               end
                               }
-            response.errback {|res| f.resume(res) }
             immediate_return ? response : Fiber.yield 
           end
         EOS
@@ -155,17 +173,29 @@ module EM
     end
 
     class Cursor
-    
-    
+
       %w(next_document has_next? explain count defer_as_a).each do |name|
         class_eval <<-EOS, __FILE__, __LINE__
           alias :a#{name} :#{name}
           def #{name}(*args)
             f = Fiber.current
+            immediate_return = false
             response = a#{name}(*args)
-            response.callback { |res| f.resume(res) }
-            response.errback {|res| f.resume(res) }
-            Fiber.yield
+            response.callback { |res| 
+                                if f == Fiber.current
+                                  immediate_return = true
+                                else
+                                  f.resume(res)
+                                end
+                               }
+            response.errback { |res|
+                               if f == Fiber.current
+                                 immediate_return = true
+                               else
+                                 f.resume(res)
+                               end
+                              }
+            immediate_return ? response : Fiber.yield 
           end
         EOS
       end

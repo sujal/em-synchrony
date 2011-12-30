@@ -1,14 +1,4 @@
-require "spec/helper/all"
-require 'mongoid'
-require 'em-synchrony/mongoid'
-
-class SimpleDocument
-  include Mongoid::Document
-  
-  field :name
-  field :counter, :type=>Integer
-
-end
+require "spec/mongoid/mongoid_helper"
 
 describe Mongoid do
 

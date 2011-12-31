@@ -109,9 +109,8 @@ module EM
         
         Fiber.yield
       end
+      
     end
-    
-    
 
     class Collection
 
@@ -122,8 +121,8 @@ module EM
       # find_one  is sync in the original form, unchanged because cursor is changed
       # first     is sync, an alias for find_one
 
-      alias :afind :find
-
+      alias :afind :find      
+      
       # need to rewrite afind_one manually, as it calls next_document on
       # the cursor
 
@@ -174,7 +173,7 @@ module EM
 
     class Cursor
 
-      %w(next_document has_next? explain count defer_as_a).each do |name|
+      %w( next_document has_next? explain count defer_as_a).each do |name|
         class_eval <<-EOS, __FILE__, __LINE__
           alias :a#{name} :#{name}
           def #{name}(*args)
@@ -183,6 +182,7 @@ module EM
             response = a#{name}(*args)
             response.callback { |res| 
                                 if f == Fiber.current
+                                  response = res
                                   immediate_return = true
                                 else
                                   f.resume(res)
@@ -190,6 +190,7 @@ module EM
                                }
             response.errback { |res|
                                if f == Fiber.current
+                                 response = res
                                  immediate_return = true
                                else
                                  f.resume(res)
@@ -223,6 +224,7 @@ module EM
           end
         end
       end
+      
     end # end Cursor
     
   end

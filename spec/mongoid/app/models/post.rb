@@ -11,10 +11,6 @@ class Post
   
   has_many :links
   
-  field :title, :type => String
-  field :is_rss, :type => Boolean, :default => false
-  field :user_login, :type => String
-
   attr_protected :extra_field, :as => [:default, :parser]
   attr_protected :simple_counter, :as => :parser
   attr_protected :secure_field

@@ -29,40 +29,10 @@ module EM
         class_eval <<-EOS, __FILE__, __LINE__
           alias :a#{name} :#{name}
           def #{name}(*args)
-            f = Fiber.current
-            immediate_return = false
-            response = a#{name}(*args)
-            response.callback { |res| 
-                                if f == Fiber.current
-                                  immediate_return = true
-                                else
-                                  f.resume(res)
-                                end
-                               }
-            response.errback { |res|
-                               if f == Fiber.current
-                                 immediate_return = true
-                               else
-                                 f.resume(res)
-                               end
-                              }
-            immediate_return ? response : Fiber.yield 
+            # puts "method: \#{__method__} \#{caller}"
+            EM::Synchrony.sync a#{name}(*args)
           end
         EOS
-      end
-      
-      # need to redefine collection_names because it relies on a cursor
-      def collection_names
-        response = RequestResponse.new
-        name_resp = collections_info.adefer_as_a
-        name_resp.callback do |docs|
-          names = docs.collect{ |doc| doc['name'] || '' }
-          names = names.delete_if {|name| name.index(self.name).nil? || name.index('$')}
-          names = names.map{ |name| name.sub(self.name + '.','')}
-          response.succeed(names)
-        end
-        name_resp.errback { |err| response.fail err }
-        response
       end
       
       # need to rewrite this command since it relies on Cursor being async
@@ -70,9 +40,9 @@ module EM
         check_response = opts.fetch(:check_response, true)
         raise MongoArgumentError, "command must be given a selector" unless selector.is_a?(Hash) && !selector.empty?
 
-        if selector.keys.length > 1 && RUBY_VERSION < '1.9' && selector.class != BSON::OrderedHash
-          raise MongoArgumentError, "DB#command requires an OrderedHash when hash contains multiple keys"
-        end
+        # if selector.keys.length > 1 && RUBY_VERSION < '1.9' && selector.class != BSON::OrderedHash
+        #   raise MongoArgumentError, "DB#command requires an OrderedHash when hash contains multiple keys"
+        # end
 
         response = RequestResponse.new
         cmd_resp = Cursor.new(self.collection(SYSTEM_COMMAND_COLLECTION), :limit => -1, :selector => selector).anext_document
@@ -142,61 +112,42 @@ module EM
       alias :afirst :afind_one
       # alias :first :find_one
 
-      %w(safe_insert safe_update).each do |name|
+      %w(safe_insert safe_update find_and_modify map_reduce distinct group ).each do |name|
         class_eval <<-EOS, __FILE__, __LINE__
           alias :a#{name} :#{name}
           def #{name}(*args)
-            f = Fiber.current
-            immediate_return = false
-            response = a#{name}(*args)
-            response.callback { |res| 
-                                if f == Fiber.current
-                                  immediate_return = true
-                                else
-                                  f.resume(res)
-                                end
-                               }
-            response.errback { |res|
-                               if f == Fiber.current
-                                 immediate_return = true
-                               else
-                                 f.resume(res)
-                               end
-                              }
-            immediate_return ? response : Fiber.yield 
+            # puts "method: \#{__method__} \#{caller}"
+            EM::Synchrony.sync a#{name}(*args)
           end
         EOS
       end
 
+      alias :mapreduce :map_reduce
+      alias :amapreduce :amap_reduce
+
+      def save(doc, opts={})
+        safe_save(doc, opts.merge(:safe => false))
+      end
+
+      def update(selector, document, opts={})
+        # Initial byte is 0.
+        safe_update(selector, document, opts.merge(:safe => false))
+      end
+      
+      def insert(doc_or_docs)
+        safe_insert(doc_or_docs, :safe => false)
+      end
 
     end
 
     class Cursor
 
-      %w( next_document has_next? explain count defer_as_a).each do |name|
+      %w( next_document has_next? explain count ).each do |name|
         class_eval <<-EOS, __FILE__, __LINE__
           alias :a#{name} :#{name}
           def #{name}(*args)
-            f = Fiber.current
-            immediate_return = false
-            response = a#{name}(*args)
-            response.callback { |res| 
-                                if f == Fiber.current
-                                  response = res
-                                  immediate_return = true
-                                else
-                                  f.resume(res)
-                                end
-                               }
-            response.errback { |res|
-                               if f == Fiber.current
-                                 response = res
-                                 immediate_return = true
-                               else
-                                 f.resume(res)
-                               end
-                              }
-            immediate_return ? response : Fiber.yield 
+            # puts "method: \#{__method__} \#{caller}"
+            EM::Synchrony.sync a#{name}(*args)
           end
         EOS
       end
@@ -204,16 +155,53 @@ module EM
       alias :anext :anext_document
       alias :next :next_document
       
-      alias :to_a :defer_as_a
-      alias :ato_a :adefer_as_a
+      # the following methods are hand tweaked because they are the primary interface
+      # to the rest of the functionality. The key things to understand:
+      #
+      # - #next_document -  has an async refresh call internally (what actually runs the query for
+      #     this cursor). Most users will not use this method directly, but it should work
+      #     sychronously. Used internally by Cursor#explain
+      # - #each - only calls next_document, and is only called by Cursor#defer_as_a internally. It is
+      #     THE primary method to interact with the cursor so... MUST be sync.
+      # - #defer_as_a - the fly in the ointment. It is meant to return a deferrable (hence the name). It
+      #     is used by Database#collection_names and Database#index_information internally. Can be used 
+      #     by developers. So LEAVE IT ASYNC. That requires an async #each impl, which makes me 
+      #     itch. No better idea yet.
+      # - #explain - rewriting to make it fully synchronous - just was easier for now. Mongoid does
+      #     reference it as a delegated operation to the driver.
       
-      def each(&blk)
+      def each(fiber=nil, &blk)
+        raise "A callback block is required for #each" unless blk
+        fiber ||= Fiber.current
+        EM::Synchrony.next_tick do
+          next_doc_resp = anext_document
+          next_doc_resp.callback do |doc|
+            blk.call(doc)
+            if doc.nil?
+              close
+              fiber.resume unless fiber == Fiber.current
+            else
+              self.each(fiber, &blk)
+            end
+          end
+          next_doc_resp.errback do |err|
+            if blk.arity > 1
+              blk.call(:error, err)
+            else
+              blk.call(:error)
+            end
+          end
+        end
+        Fiber.yield if fiber == Fiber.current
+      end
+      
+      def aeach(&blk)
         raise "A callback block is required for #each" unless blk
         EM.next_tick do
           next_doc_resp = anext_document
           next_doc_resp.callback do |doc|
             blk.call(doc)
-            doc.nil? ? close : self.each(&blk)
+            doc.nil? ? close : self.aeach(&blk)
           end
           next_doc_resp.errback do |err|
             if blk.arity > 1
@@ -225,6 +213,29 @@ module EM
         end
       end
       
+      def defer_as_a
+        response = RequestResponse.new
+        items = []
+        self.aeach do |doc,err|
+          if doc == :error
+            response.fail(err)
+          elsif doc
+            items << doc
+          else
+            response.succeed(items)
+          end
+        end
+        response
+      end
+      
+      def explain
+        response = RequestResponse.new
+        c = Cursor.new(@collection, query_options_hash.merge(:limit => -@limit.abs, :explain => true))
+        explanation = c.next_document
+        c.close
+        explanation
+      end
+
     end # end Cursor
     
   end

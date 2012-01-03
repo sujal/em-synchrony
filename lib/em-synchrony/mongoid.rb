@@ -1,8 +1,8 @@
 require "em-mongo"
-require "em-synchrony/mongoid/extras"
 require "em-synchrony/em-mongo"
 require "em-synchrony/mongoid/database"
 require "em-synchrony/mongoid/cursor"
+require "em-synchrony/mongoid/extras"
 
 # disable mongoid connection initializer
 if defined? Rails

@@ -151,10 +151,7 @@ module EM
           end
         EOS
       end
-      
-      alias :anext :anext_document
-      alias :next :next_document
-      
+            
       # the following methods are hand tweaked because they are the primary interface
       # to the rest of the functionality. The key things to understand:
       #
@@ -170,13 +167,17 @@ module EM
       # - #explain - rewriting to make it fully synchronous - just was easier for now. Mongoid does
       #     reference it as a delegated operation to the driver.
       
+      # alias :anext_document :next_document
+      alias :anext :anext_document
+      alias :next :next_document
+      
       def each(fiber=nil, &blk)
         raise "A callback block is required for #each" unless blk
         fiber ||= Fiber.current
         EM::Synchrony.next_tick do
           next_doc_resp = anext_document
           next_doc_resp.callback do |doc|
-            blk.call(doc)
+            Fiber.new { blk.call(doc) }.resume
             if doc.nil?
               close
               fiber.resume unless fiber == Fiber.current
@@ -185,11 +186,13 @@ module EM
             end
           end
           next_doc_resp.errback do |err|
-            if blk.arity > 1
-              blk.call(:error, err)
-            else
-              blk.call(:error)
-            end
+            Fiber.new { 
+              if blk.arity > 1
+                blk.call(:error, err)
+              else
+                blk.call(:error)
+              end
+            }.resume
           end
         end
         Fiber.yield if fiber == Fiber.current

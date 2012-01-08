@@ -29,20 +29,15 @@ module EM
         class_eval <<-EOS, __FILE__, __LINE__
           alias :a#{name} :#{name}
           def #{name}(*args)
-            # puts "method: \#{__method__} \#{caller}"
             EM::Synchrony.sync a#{name}(*args)
           end
         EOS
       end
       
-      # need to rewrite this command since it relies on Cursor being async
+      # this method is reimplemented because it requires Cursor#next_document to be async, which is no longer is.
       def command(selector, opts={})
         check_response = opts.fetch(:check_response, true)
         raise MongoArgumentError, "command must be given a selector" unless selector.is_a?(Hash) && !selector.empty?
-
-        # if selector.keys.length > 1 && RUBY_VERSION < '1.9' && selector.class != BSON::OrderedHash
-        #   raise MongoArgumentError, "DB#command requires an OrderedHash when hash contains multiple keys"
-        # end
 
         response = RequestResponse.new
         cmd_resp = Cursor.new(self.collection(SYSTEM_COMMAND_COLLECTION), :limit => -1, :selector => selector).anext_document
@@ -73,9 +68,7 @@ module EM
         @db = {}
         # establish connection before returning
         @em_connection.callback { f.resume }
-        
-        # not sure how the resume mechanics work here - going to ignore for now
-        # @em_connection.errback { f.resume; @on_close.call }
+        @em_connection.errback { @on_close.call; f.resume }
         
         Fiber.yield
       end
@@ -116,7 +109,6 @@ module EM
         class_eval <<-EOS, __FILE__, __LINE__
           alias :a#{name} :#{name}
           def #{name}(*args)
-            # puts "method: \#{__method__} \#{caller}"
             EM::Synchrony.sync a#{name}(*args)
           end
         EOS
@@ -146,7 +138,6 @@ module EM
         class_eval <<-EOS, __FILE__, __LINE__
           alias :a#{name} :#{name}
           def #{name}(*args)
-            # puts "method: \#{__method__} \#{caller}"
             EM::Synchrony.sync a#{name}(*args)
           end
         EOS
@@ -171,9 +162,8 @@ module EM
       alias :anext :anext_document
       alias :next :next_document
       
-      def each(fiber=nil, &blk)
+      def each(fiber=Fiber.current, &blk)
         raise "A callback block is required for #each" unless blk
-        fiber ||= Fiber.current
         EM::Synchrony.next_tick do
           next_doc_resp = anext_document
           next_doc_resp.callback do |doc|

@@ -2,18 +2,6 @@ require "spec/mongoid/mongoid_helper"
 require 'em-synchrony/mongoid'
 
 describe "Mongoid Finders" do
-  # 
-  # before(:all) do
-  #   puts "starting!"
-  #   EM.synchrony do
-  #     Mongoid.from_hash({"host"=> "localhost", "database"=> "test", "pool_size"=>5})   
-  #     Post.create(title: "Sample Post Alpha!", body: "rocking the rocker rocket. (yes, I'm tired...)")
-  #     Post.create(title: "Sample Post Beta!", body: "rocking the rocker rocket. (yes, I'm tired...)")
-  #     Post.create(title: "Sample Post Gamma!", body: "rocking the rocker rocket. (yes, I'm tired...)")
-  #     EventMachine.stop
-  #   end
-  #   puts "stopped!"
-  # end
 
   it "should find one" do
     
@@ -87,31 +75,24 @@ describe "Mongoid Finders" do
     EM.synchrony do
       begin
         Mongoid.from_hash({"host"=> "localhost", "port"=>27019, "database"=> "test", "pool_size"=>5})
-        # puts Link.collection
-        # puts "deleting links"
-        # Link.delete_all
-        # puts "deleting posts"
-        # Post.delete_all
         puts "creating post"
         p = Post.create(title: "Link Testing Post")
         puts "got p - #{p.new_record?}"
         puts "creating link 1"
-        l1 = Link.new(url: "http://apple.com") #, score: 10)
-        # l1.post = p
+        l1 = Link.new(url: "http://apple.com"), score: 10)
+        l1.post = p
         puts "saving #{l1.save}"
         l1.reload
         puts "creating link 2"
-        l2 = Link.new(url: "http://windowsphone.com") #, score: 9)
-        # l2.post = p
+        l2 = Link.new(url: "http://windowsphone.com"), score: 9)
+        l2.post = p
         puts "saving #{l2.save}"
         puts "creating link 3"
-        l3 = Link.new(url: "http://android.com") #, score: 8)
-        # l3.post = p
+        l3 = Link.new(url: "http://android.com"), score: 8)
+        l3.post = p
         puts "saving #{l3.save}"
 
-        # debugger
-
-        #link = p.links.order_by([:score, :desc]).first
+        link = p.links.order_by([:score, :desc]).first
       rescue Exception,Error
         puts $!        
       end

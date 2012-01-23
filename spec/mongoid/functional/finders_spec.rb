@@ -79,16 +79,16 @@ describe "Mongoid Finders" do
         p = Post.create(title: "Link Testing Post")
         puts "got p - #{p.new_record?}"
         puts "creating link 1"
-        l1 = Link.new(url: "http://apple.com"), score: 10)
+        l1 = Link.new(url: "http://apple.com", score: 10)
         l1.post = p
         puts "saving #{l1.save}"
         l1.reload
         puts "creating link 2"
-        l2 = Link.new(url: "http://windowsphone.com"), score: 9)
+        l2 = Link.new(url: "http://windowsphone.com", score: 9)
         l2.post = p
         puts "saving #{l2.save}"
         puts "creating link 3"
-        l3 = Link.new(url: "http://android.com"), score: 8)
+        l3 = Link.new(url: "http://android.com", score: 8)
         l3.post = p
         puts "saving #{l3.save}"
 

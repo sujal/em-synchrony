@@ -183,6 +183,7 @@ module EM
                 blk.call(:error)
               end
             }.resume
+            fiber.resume unless fiber == Fiber.current
           end
         end
         Fiber.yield if fiber == Fiber.current

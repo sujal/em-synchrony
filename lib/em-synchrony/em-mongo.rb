@@ -162,31 +162,14 @@ module EM
       alias :anext :anext_document
       alias :next :next_document
       
-      def each(fiber=Fiber.current, &blk)
+      def each(&blk)
         raise "A callback block is required for #each" unless blk
-        EM::Synchrony.next_tick do
-          next_doc_resp = anext_document
-          next_doc_resp.callback do |doc|
-            Fiber.new { blk.call(doc) }.resume
-            if doc.nil?
-              close
-              fiber.resume unless fiber == Fiber.current
-            else
-              self.each(fiber, &blk)
-            end
-          end
-          next_doc_resp.errback do |err|
-            Fiber.new { 
-              if blk.arity > 1
-                blk.call(:error, err)
-              else
-                blk.call(:error)
-              end
-            }.resume
-            fiber.resume unless fiber == Fiber.current
-          end
+        doc = next_document
+        while !doc.nil? && !(doc.kind_of?(Array) && doc.none?)
+          blk.call(doc)
+          doc = next_document
         end
-        Fiber.yield if fiber == Fiber.current
+        close
       end
       
       def aeach(&blk)

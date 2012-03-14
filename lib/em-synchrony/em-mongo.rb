@@ -164,6 +164,10 @@ module EM
       
       def each(&blk)
         raise "A callback block is required for #each" unless blk
+        
+        # using this bizarre looping construct because next_document doesn't 
+        # return nil, at least not with the current EM:Synchrony.sync impl. 
+        # so, we do this. I could do a break inside, I guess, but meh. This works.
         doc = next_document
         while !doc.nil? && !(doc.kind_of?(Array) && doc.none?)
           blk.call(doc)
@@ -190,6 +194,16 @@ module EM
         end
       end
       
+      def to_a
+        items = []
+        self.each do |doc|
+          if (doc != :error)
+            items << doc
+          end
+        end
+        items 
+      end
+      
       def defer_as_a
         response = RequestResponse.new
         items = []
@@ -204,6 +218,7 @@ module EM
         end
         response
       end
+      alias :ato_a :defer_as_a
       
       def explain
         response = RequestResponse.new

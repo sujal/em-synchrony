@@ -1,5 +1,4 @@
 require "spec/mongoid/mongoid_helper"
-require 'em-synchrony/mongoid'
 
 describe "Mongoid Finders" do
 
@@ -9,7 +8,7 @@ describe "Mongoid Finders" do
 
     EM.synchrony do
       begin
-        Mongoid.from_hash({"host"=> "localhost", "port"=>27019, "database"=> "test", "pool_size"=>5})
+        Mongoid.from_hash({"host"=> "localhost", "port"=>27017, "database"=> "test", "pool_size"=>10})
         Post.create(title: "Sample Post Alpha!", body: "rocking the rocker rocket. (yes, I'm tired...)")
         Post.create(title: "Sample Post Beta!", body: "rocking the rocker rocket. (yes, I'm tired...)")
         Post.create(title: "Sample Post Gamma!", body: "rocking the rocker rocket. (yes, I'm tired...)")
@@ -31,7 +30,7 @@ describe "Mongoid Finders" do
 
     EM.synchrony do
       begin
-        Mongoid.from_hash({"host"=> "localhost", "port"=>27019, "database"=> "test", "pool_size"=>5})
+        Mongoid.from_hash({"host"=> "localhost", "port"=>27017, "database"=> "test", "pool_size"=>10})
         SimpleDocument.delete_all
         SimpleDocument.create(name: "Simple Doc Alpha!")
         doc = SimpleDocument.first
@@ -46,27 +45,6 @@ describe "Mongoid Finders" do
     
   end
   
-  it "should find a Link" do
-    
-    link = nil
-
-    EM.synchrony do
-      begin
-        Mongoid.from_hash({"host"=> "localhost", "port"=>27019, "database"=> "test", "pool_size"=>5})
-        Link.delete_all
-        Link.create(url: "http://fatmixx.com")
-        link = Link.first
-      rescue Exception,Error
-        puts $!
-      end
-      EM.stop
-    end
-    
-    link.should_not be_nil
-    link.url.should eq("http://fatmixx.com")
-    
-  end
-  
   it "should traverse a relation" do
     link = nil
     
@@ -74,7 +52,7 @@ describe "Mongoid Finders" do
     
     EM.synchrony do
       begin
-        Mongoid.from_hash({"host"=> "localhost", "port"=>27019, "database"=> "test", "pool_size"=>5})
+        Mongoid.from_hash({"host"=> "localhost", "port"=>27017, "database"=> "test", "pool_size"=>10})
         puts "creating post"
         p = Post.create(title: "Link Testing Post")
         puts "got p - #{p.new_record?}"
@@ -104,5 +82,33 @@ describe "Mongoid Finders" do
     link.score.should eq(10)
 
   end
+
+
+  it "should find a Link" do
+
+    puts "fourth test - should find a link"
+    
+    link = nil
+
+    EM.synchrony do
+      puts "synchro started"
+      begin
+        Mongoid.from_hash({"host"=> "localhost", "port"=>27017, "database"=> "test", "pool_size"=>10})
+        puts "connected!"
+        Link.delete_all
+        puts "boom"
+        Link.create(url: "http://fatmixx.com")
+        link = Link.first
+      rescue Exception,Error
+        puts $!
+      end
+      EM.stop
+    end
+    
+    link.should_not be_nil
+    link.url.should eq("http://fatmixx.com")
+    
+  end
+
   
 end

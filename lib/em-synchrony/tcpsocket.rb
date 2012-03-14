@@ -5,9 +5,9 @@ module EventMachine
         alias_method :_old_new, :new
         def new(*args)
           if args.size == 1
-            _old_new *args
+            _old_new(*args)
           else
-            socket = EventMachine::connect( *args[0..1], self )
+            socket = EventMachine::connect(*args[0..1], self)
             raise SocketError unless socket.sync(:in)  # wait for connection
             socket
           end
@@ -34,7 +34,7 @@ module EventMachine
       def setsockopt(level, name, value); end
 
       def send(msg, flags = 0)
-        raise "Unknown flags in send(): #{flags}"  if flags.nonzero?
+        raise "Unknown flags in send(): #{flags}" if flags.nonzero?
         len = msg.bytesize
         write_data(msg) or sync(:out) or raise(IOError)
         len
@@ -60,6 +60,7 @@ module EventMachine
       def unbind
         @in_req.fail  nil if @in_req
         @out_req.fail nil if @out_req
+        close
       end
 
       def receive_data(data)
